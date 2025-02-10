@@ -48,6 +48,12 @@ const processImage = async () => {
 
     canvas.width = 64
     canvas.height = 64
+    
+    // 使用白色背景
+    ctx.fillStyle = '#FFFFFF'
+    ctx.fillRect(0, 0, 64, 64)
+    
+    // 绘制图片
     ctx.drawImage(img, 0, 0, 64, 64)
 
     const imageData = ctx.getImageData(0, 0, 64, 64)
@@ -61,7 +67,16 @@ const processImage = async () => {
         const b = imageData.data[i + 2]
         const a = imageData.data[i + 3]
         
-        const hex = `${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}${a.toString(16).padStart(2, '0')}`
+        // 根据 Alpha 值混合颜色
+        const alpha = a / 255
+        const bgColor = 255 // 白色背景
+        
+        const finalR = Math.round(r * alpha + bgColor * (1 - alpha))
+        const finalG = Math.round(g * alpha + bgColor * (1 - alpha))
+        const finalB = Math.round(b * alpha + bgColor * (1 - alpha))
+        
+        // 转换为游戏可用的颜色格式
+        const hex = `${finalR.toString(16).padStart(2, '0')}${finalG.toString(16).padStart(2, '0')}${finalB.toString(16).padStart(2, '0')}ff`
         
         pixels.push({ hex, x, y })
       }
