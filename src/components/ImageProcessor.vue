@@ -21,12 +21,46 @@ const selectedFormat = ref<OutputFormat>('array')
 const formattedOutput = ref('')
 const isCopied = ref(false)
 
-const handleFileSelect = (event: Event) => {
+const handleFileSelect = async (event: Event) => {
   const input = event.target as HTMLInputElement
   if (input.files && input.files[0]) {
     imageFile.value = input.files[0]
-    previewUrl.value = URL.createObjectURL(input.files[0])
-    processImage()
+    
+    // 创建临时的64x64预览
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(input.files[0])
+    
+    try {
+      await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+        img.src = objectUrl
+      })
+
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      if (!ctx) throw new Error('无法获取 canvas context')
+
+      canvas.width = 64
+      canvas.height = 64
+      
+      // 使用高质量的缩放
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+      
+      // 绘制缩放后的图片
+      ctx.drawImage(img, 0, 0, 64, 64)
+      
+      // 更新预览URL为64x64版本
+      previewUrl.value = canvas.toDataURL()
+      
+      // 处理图片
+      processImage()
+    } catch (error) {
+      console.error('预览生成失败:', error)
+    } finally {
+      URL.revokeObjectURL(objectUrl)
+    }
   }
 }
 
@@ -42,21 +76,24 @@ const processImage = async () => {
       img.onload = resolve
     })
 
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('无法获取 canvas context')
+    // 创建临时画布进行图片缩放
+    const tempCanvas = document.createElement('canvas')
+    const tempCtx = tempCanvas.getContext('2d')
+    if (!tempCtx) throw new Error('无法获取临时 canvas context')
 
-    canvas.width = 64
-    canvas.height = 64
-    
-    // 使用白色背景
-    ctx.fillStyle = '#FFFFFF'
-    ctx.fillRect(0, 0, 64, 64)
-    
-    // 绘制图片
-    ctx.drawImage(img, 0, 0, 64, 64)
+    // 设置临时画布大小为64x64
+    tempCanvas.width = 64
+    tempCanvas.height = 64
 
-    const imageData = ctx.getImageData(0, 0, 64, 64)
+    // 使用 imageSmoothingEnabled 来控制缩放质量
+    tempCtx.imageSmoothingEnabled = true
+    tempCtx.imageSmoothingQuality = 'high'
+
+    // 在临时画布上绘制缩放后的图片
+    tempCtx.drawImage(img, 0, 0, 64, 64)
+
+    // 获取缩放后的图片数据
+    const imageData = tempCtx.getImageData(0, 0, 64, 64)
     const pixels: PixelData[] = []
 
     for (let y = 0; y < 64; y++) {
@@ -82,6 +119,9 @@ const processImage = async () => {
       }
     }
 
+    // 更新预览图为处理后的64x64图片
+    previewUrl.value = tempCanvas.toDataURL()
+    
     processedPixels.value = pixels
     formatOutput()
   } catch (error) {
@@ -330,11 +370,12 @@ const handleFormatChange = (event: Event) => {
         <div v-if="previewUrl" class="space-y-4">
           <h3 class="text-lg font-medium text-gray-900 max-md:text-base">{{ t('imageProcessor.preview.title') }}</h3>
           <div class="overflow-hidden rounded-lg bg-gray-50 p-6 max-md:p-4">
-            <div class="relative w-full h-48">
+            <div class="relative aspect-square">
               <img
                 :src="previewUrl"
                 alt="Preview"
-                class="absolute inset-0 w-full h-full object-contain"
+                class="absolute inset-0 w-full h-full object-none"
+                style="image-rendering: pixelated;"
               />
             </div>
             <div class="mt-4 text-center text-sm text-gray-500 max-md:text-xs max-md:mt-2">
